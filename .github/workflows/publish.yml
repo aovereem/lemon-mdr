@@ -1,0 +1,29 @@
+name: publish
+
+# Publishes lemon-mdr to npm when you cut a GitHub Release (or run this workflow manually).
+# Uses npm Trusted Publishing (OIDC): no NPM_TOKEN secret, and provenance is attached
+# automatically. One-time setup on npmjs.com — see the repo README / the note below.
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write # required: lets the job mint the OIDC token npm verifies
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+      # Trusted publishing needs a recent npm (>= 11.5.1); the runner's bundled one may be older.
+      - run: npm install -g npm@latest
+      - run: npm ci
+      # `prepublishOnly` builds dist/ first; OIDC auth + provenance are automatic once the
+      # trusted publisher is configured on npmjs.com — no token needed.
+      - run: npm publish
