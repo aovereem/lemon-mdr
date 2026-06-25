@@ -1,6 +1,6 @@
 # lemon microdata refinement
 
-A [Severance](https://www.hudsandguis.com/home/2022/severance)-style Macrodata Refinement
+A Severance-style Macrodata Refinement
 terminal for your Claude Code agent sessions — a parody skin (original art, no Lumon marks)
 that turns your work into a drifting field of numbers, "scary" clusters that gather and
 pour into five **refinement boxes**, all on a muted-cyan CRT, with the Lumon **reward
