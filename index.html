@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
+    <title>lemon microdata refinement</title>
+    <style>
+      /* A Lumon terminal. Muted cyan on a dead-black CRT — a refinement terminal for your
+         Claude Code sessions. The number field is the hero; chrome stays thin/wireframe. */
+      :root {
+        --bg: #04100c;
+        --cy: #5ef0d6;       /* the workmanlike cyan */
+        --cy-dim: #2c8073;   /* resting digits */
+        --cy-hot: #c4fff2;   /* a "scary" cluster, lit */
+        --wire: rgba(94, 240, 214, 0.42);
+        --wire-soft: rgba(94, 240, 214, 0.2);
+        --red: #e8705c;      /* a stall — the only warm note on the screen */
+        --glow: 0 0 8px rgba(94, 240, 214, 0.55);
+        --font-crt: "VT323", ui-monospace, "SF Mono", Menlo, monospace;
+        /* the four tempers, show-accurate colours (the refs are not monochrome) */
+        --t-wo: #6fe09a;     /* Woe — green */
+        --t-fc: #ecc14a;     /* Frolic — amber */
+        --t-dr: #ec7fb0;     /* Dread — pink (show-accurate) */
+        --t-ma: #5fa8f0;     /* Malice — blue */
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; overflow: hidden; background: #000; }
+      body {
+        font: 14px/1.3 ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+        color: var(--cy);
+        -webkit-font-smoothing: none;
+      }
+
+      /* The monitor. Everything lives inside this single dark panel. */
+      #screen {
+        position: fixed; inset: 0; background: var(--bg);
+        display: flex; flex-direction: column;
+        border-radius: 26px;
+        /* domed-glass falloff — the deep inset darkening + rounded corners read as curvature */
+        box-shadow: inset 0 0 90px rgba(0,0,0,0.6), inset 0 0 250px rgba(0, 0, 0, 0.95);
+      }
+      #screen.stall { animation: tremor 0.5s linear; }
+      @keyframes tremor {
+        0%, 100% { transform: translate(0, 0); }
+        20% { transform: translate(-1px, 1px); }
+        40% { transform: translate(1px, -1px); }
+        60% { transform: translate(-1px, -1px); }
+        80% { transform: translate(1px, 1px); }
+      }
+
+      /* Header — Lumon mark · current file · refinement percentage. */
+      #head {
+        flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+        padding: 13px 22px; border-bottom: 1px solid var(--wire-soft);
+        letter-spacing: 0.2em; font-size: 12px; user-select: none;
+      }
+      #mark { display: flex; align-items: center; gap: 9px; opacity: 0.85; }
+      #mark svg { height: 26px; width: auto; display: block; color: var(--cy); filter: drop-shadow(0 0 5px rgba(94,240,214,0.5)); }
+      #mark b { font-weight: 600; letter-spacing: 0.26em; text-shadow: var(--glow); }
+      #file { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+      #file-name { font-family: var(--font-crt); font-size: 19px; letter-spacing: 0.3em; text-shadow: var(--glow); }
+      #file-meta { font-size: 11px; color: var(--cy-dim); letter-spacing: 0.16em; }
+      #pct { font-family: var(--font-crt); font-variant-numeric: tabular-nums; font-size: 26px; letter-spacing: 0.04em; text-shadow: var(--glow); min-width: 92px; text-align: right; }
+
+      /* File tabs — the other live sessions, switchable. */
+      #tabs {
+        flex: 0 0 auto; display: flex; gap: 0; align-items: stretch;
+        border-bottom: 1px solid var(--wire-soft); min-height: 26px; overflow: hidden;
+      }
+      .tab {
+        padding: 5px 16px; font-size: 11px; letter-spacing: 0.14em; color: var(--cy-dim);
+        border-right: 1px solid var(--wire-soft); cursor: pointer; white-space: nowrap; user-select: none;
+      }
+      .tab:hover { color: var(--cy); }
+      .tab.on { color: var(--bg); background: var(--cy); text-shadow: none; }
+
+      /* The number field. */
+      #field {
+        position: relative; flex: 1 1 auto; overflow: hidden;
+        display: grid; align-content: center; justify-content: center;
+        padding: 10px 0;
+      }
+      .num {
+        width: 26px; text-align: center; color: var(--cy-dim); user-select: none;
+        font-family: var(--font-crt); font-size: 22px;
+        text-shadow: 0.5px 0 rgba(255, 40, 90, 0.22), -0.5px 0 rgba(40, 170, 255, 0.22);
+        animation: drift var(--d) ease-in-out var(--o) infinite alternate;
+        transition: color 0.12s;
+      }
+      .num.hot {
+        color: var(--cy-hot); text-shadow: var(--glow);
+        animation: pulse 0.6s ease-out forwards;
+      }
+      .num.hole { opacity: 0; }
+      .num.refill { animation: refill 0.9s ease; }
+      @keyframes refill { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes drift { from { transform: translateY(-1.5px); } to { transform: translateY(1.5px); } }
+      @keyframes pulse { 0% { transform: scale(1); } 60% { transform: scale(1.6); } 100% { transform: scale(1.45); } }
+
+      /* A digit gathering above its box, then pouring down into it. */
+      .streak {
+        position: fixed; z-index: 20; color: var(--cy-hot); text-shadow: var(--glow);
+        font-family: var(--font-crt); font-size: 22px;
+        pointer-events: none; transition: transform 0.95s cubic-bezier(.25,.85,.3,1), opacity 0.95s;
+      }
+
+      /* Boxes 01–05 — closed by default (id · % bar · %); open upward on hover / click /
+         a turn landing, revealing the four temper bars. Each turn's work drops into a box. */
+      #bins {
+        flex: 0 0 auto; display: flex; gap: 30px; padding: 16px 22px 34px; justify-content: center;
+        border-top: 1px solid var(--wire-soft); align-items: flex-end;
+      }
+      .box { flex: 1 1 0; max-width: 200px; position: relative; display: flex; flex-direction: column; gap: 6px; }
+      .box-num {
+        border: 1px solid var(--wire); border-radius: 4px; padding: 6px 8px;
+        text-align: center; transition: border-color 0.2s;
+      }
+      .box-num .bid { font-size: 14px; letter-spacing: 0.22em; color: var(--cy); }
+      .box-bar {
+        position: relative; border: 1px solid var(--wire); border-radius: 4px;
+        height: 26px; overflow: hidden; background: rgba(94,240,214,0.06);
+        transition: border-color 0.2s;
+      }
+      .box-bar .bfill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--wire); transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+      .box-bar .bpct { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); z-index: 1; font-family: var(--font-crt); font-size: 17px; line-height: 1; color: var(--cy-hot); text-shadow: var(--glow); }
+      /* cardboard lid — two flaps that swing open while a turn pours in, then close. */
+      .box-lid { position: absolute; left: 5px; right: 5px; top: -1px; height: 7px; display: flex; gap: 3px; pointer-events: none; z-index: 7; }
+      .box-lid .flap { flex: 1; height: 100%; border-top: 2px solid var(--wire); transition: transform 0.3s cubic-bezier(.5,0,.3,1), border-color 0.3s; }
+      .box-lid .flap-l { transform-origin: left center; }
+      .box-lid .flap-r { transform-origin: right center; }
+      .box.landing .box-lid .flap-l { transform: rotate(-120deg); border-top-color: var(--cy-hot); }
+      .box.landing .box-lid .flap-r { transform: rotate(120deg); border-top-color: var(--cy-hot); }
+      /* keyboard focus ring on the interactive controls */
+      .tab:focus-visible, .box:focus-visible, #explorer .exrow:focus-visible,
+      #explorer .exwin-x:focus-visible, #explorer .exsort:focus-visible {
+        outline: 2px solid var(--cy-hot); outline-offset: 2px; border-radius: 3px;
+      }
+      .box.done .bfill { background: var(--cy); }
+      .box.done .box-num, .box.done .box-bar { border-color: var(--cy); }
+      .box.landing .box-num, .box.landing .box-bar { border-color: var(--cy-hot); }
+      .box.landing .bpct { animation: valpop 0.5s ease; }
+      /* the lid / temper popover — hidden until the box opens */
+      .box-pop {
+        position: absolute; left: 50%; bottom: calc(100% + 9px); transform: translateX(-50%) translateY(8px);
+        width: 204px; max-width: 90vw; padding: 11px 13px 13px;
+        background: #061a14; border: 1px solid var(--wire); border-radius: 5px; z-index: 8;
+        opacity: 0; pointer-events: none; transition: opacity 0.16s, transform 0.16s;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      }
+      .box-pop::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+        border: 6px solid transparent; border-top-color: var(--wire); }
+      .box.hover .box-pop, .box.pin .box-pop { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+      .box .bx-cap { display: block; font-size: 12px; letter-spacing: 0.18em; color: var(--cy-dim); margin-bottom: 9px; }
+      .box .tbar { display: flex; align-items: center; gap: 9px; margin: 7px 0; }
+      .box .tbar .tl { font-size: 13px; letter-spacing: 0.06em; color: var(--cy-dim); width: 24px; }
+      .box .tbar .tt { flex: 1; height: 12px; background: rgba(94,240,214,0.08); border-radius: 2px; overflow: hidden; }
+      .box .tbar .tf { display: block; height: 100%; width: 0; transition: width 0.5s; }
+      /* On-page debug readout (only present with ?debug in the URL). */
+      #mdr-debug { position: fixed; top: 54px; left: 14px; z-index: 40; margin: 0; font-family: "SF Mono", Consolas, monospace; font-size: 11px; line-height: 1.55; color: var(--cy); background: rgba(0,18,16,0.82); border: 1px solid rgba(94,240,214,0.25); padding: 8px 11px; white-space: pre; pointer-events: none; text-shadow: 0 0 4px rgba(94,240,214,0.4); }
+      .tf.t-wo { background: var(--t-wo); } .tf.t-fc { background: var(--t-fc); }
+      .tf.t-dr { background: var(--t-dr); } .tf.t-ma { background: var(--t-ma); }
+
+      /* CRT overlays — scanlines, vignette, a slow flicker. Pointer-transparent. */
+      #scan, #vig { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+      #scan { background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,0.45) 2px 3px); mix-blend-mode: multiply; }
+      /* Curved-glass vignette: a soft top glare + a domed radial falloff darkening the corners. */
+      #vig { background:
+        radial-gradient(ellipse 78% 52% at 50% -8%, rgba(180,255,245,0.06), transparent 60%),
+        radial-gradient(ellipse 122% 122% at center, transparent 42%, rgba(0,0,0,0.5) 80%, rgba(0,0,0,0.9) 100%);
+        animation: flicker 7s ease-in-out infinite; }
+      @keyframes flicker { 0%, 100% { opacity: 1; } 48% { opacity: 0.96; } 50% { opacity: 0.88; } 52% { opacity: 0.97; } }
+      /* A slow horizontal hum/roll bar drifting down the tube. */
+      #roll {
+        position: fixed; left: 0; right: 0; height: 100px; z-index: 28; pointer-events: none;
+        background: linear-gradient(to bottom, rgba(94,240,214,0) 0%, rgba(94,240,214,0.06) 50%, rgba(94,240,214,0) 100%);
+        animation: roll 9s linear infinite;
+      }
+      @keyframes roll { 0% { top: -120px; } 100% { top: 100%; } }
+
+      /* The refiner's crosshair, trailing the mouse. */
+      #cross { position: fixed; z-index: 25; pointer-events: none; mix-blend-mode: screen; display: none; }
+      #cross .h, #cross .v { position: absolute; background: var(--wire); }
+      #cross .h { left: -12px; top: 0; width: 24px; height: 1px; }
+      #cross .v { left: 0; top: -12px; width: 1px; height: 24px; }
+
+      /* Connection status — bottom corner, quiet. */
+      #status {
+        position: fixed; bottom: 9px; right: 14px; z-index: 31; font-size: 11px;
+        letter-spacing: 0.16em; color: var(--cy-dim); user-select: none;
+      }
+      #status.live { color: var(--cy); }
+      #status.lost { color: var(--red); }
+
+      /* The compounding reward standing — bottom-left, opposite the status. */
+      #standing {
+        position: fixed; bottom: 9px; left: 14px; z-index: 31; font-size: 11px;
+        letter-spacing: 0.1em; color: var(--cy-dim); user-select: none;
+      }
+      #standing b { color: var(--cy); font-weight: 600; letter-spacing: 0.16em; }
+
+      /* Emblem shelf — the temper personifications earned per box completion (quiet). */
+      /* Two groups: prizes (MDR rewards) on the left, masks (tempers) on the right, with a gap. */
+      #shelf { position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 31; display: flex; gap: 34px; align-items: flex-end; pointer-events: none; }
+      #shelf .shelf-group { display: flex; gap: 6px; align-items: flex-end; }
+      #shelf .emb-wrap { width: 22px; height: 24px; opacity: 0.85; }
+      #shelf .emb { display: block; width: 100%; height: 100%; }
+      #shelf .emb svg { display: block; width: 100%; height: 100%; }
+      #shelf .t-wo { color: var(--t-wo); } #shelf .t-fc { color: var(--t-fc); }
+      #shelf .t-dr { color: var(--t-dr); } #shelf .t-ma { color: var(--t-ma); }
+      #shelf .emb-wrap.new { animation: embpop 1s ease; }
+      @keyframes embpop { 0% { transform: translateY(10px) scale(0.5); opacity: 0; } 55% { transform: translateY(0) scale(1.25); opacity: 1; } 100% { transform: none; opacity: 0.85; } }
+      /* the gold "Refiner of the Quarter" waffle (balanced full cycle) */
+      #perk-overlay.gold .perk-svg svg { color: var(--t-fc); filter: drop-shadow(0 0 13px rgba(236, 193, 74, 0.6)); }
+      #perk-overlay.gold .perk-title { color: var(--t-fc); }
+
+      /* Celebrations — a full-page TRANSPARENT overlay: the field blurs behind, soft
+         bokeh drifts, a CRT glitch brings the reward in, the wireframe draws itself on. */
+      #perk-overlay, #boot { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; }
+      #perk-overlay { flex-direction: column; cursor: pointer; overflow: hidden;
+        background: radial-gradient(ellipse at center, rgba(4,16,12,0.30), rgba(4,16,12,0.72));
+        backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px); }
+      #perk-overlay.show { display: flex; }
+      #perk-overlay.out { animation: perkout 0.5s ease forwards; }
+      #perk-overlay .bokeh { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+      #perk-overlay .bokeh i { position: absolute; border-radius: 50%; filter: blur(7px); opacity: 0.5;
+        background: radial-gradient(circle, rgba(94,240,214,0.5), rgba(94,240,214,0) 70%);
+        animation: bokehdrift var(--bd, 9s) ease-in-out infinite alternate; }
+      @keyframes bokehdrift { from { transform: translate(0,0) scale(1); } to { transform: translate(var(--bx,18px), var(--by,-22px)) scale(1.25); } }
+      #perk-overlay .perk-content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center;
+        animation: perkglitch 0.62s cubic-bezier(.2,.85,.2,1); }
+      @keyframes perkglitch {
+        0% { opacity: 0; transform: scale(0.92) translateY(8px); filter: blur(3px); }
+        28% { opacity: 1; transform: scale(1.015); filter: none; }
+        33% { transform: translateX(-4px); } 38% { transform: translateX(4px); } 44% { transform: none; }
+        100% { opacity: 1; transform: none; }
+      }
+      .perk-svg { width: 200px; height: 160px; }
+      .perk-svg svg { width: 100%; height: 100%; display: block; color: var(--cy); filter: drop-shadow(0 0 10px rgba(94,240,214,0.55)); }
+      .perk-svg svg path, .perk-svg svg line, .perk-svg svg polyline, .perk-svg svg polygon {
+        stroke-dasharray: 640; stroke-dashoffset: 640; animation: perkstroke 1.1s ease forwards 0.18s; }
+      .perk-svg svg circle, .perk-svg svg ellipse, .perk-svg svg rect { opacity: 0; animation: perkfade 0.5s ease forwards 0.55s; }
+      @keyframes perkstroke { to { stroke-dashoffset: 0; } }
+      @keyframes perkfade { to { opacity: 1; } }
+      .perk-title { font-family: var(--font-crt); font-size: 42px; letter-spacing: 0.16em; color: var(--cy-hot); text-shadow: var(--glow); margin-top: 16px; text-align: center; padding: 0 16px; }
+      .perk-sub { font-size: 12px; letter-spacing: 0.2em; color: var(--cy-dim); margin-top: 10px; text-transform: uppercase; text-align: center; }
+      @keyframes perkout { to { opacity: 0; } }
+      #confetti { position: fixed; inset: 0; z-index: 55; pointer-events: none; }
+      #shelf .thing { color: var(--cy); }
+      #shelf .waffle { color: var(--t-fc); } /* the cycle-completion waffle token, gold */
+      /* a "dud" reward is deliberately underwhelming — small, flat, no glow */
+      #perk-overlay.tier-dud { background: radial-gradient(ellipse at center, rgba(4,16,12,0.22), rgba(4,16,12,0.55)); }
+      #perk-overlay.tier-dud .perk-title { font-size: 28px; color: var(--cy); text-shadow: none; }
+      #perk-overlay.tier-dud .perk-svg svg { filter: none; opacity: 0.85; }
+      /* Music Dance Experience — flashing blue/red overhead lights (tier-dance only) */
+      #perk-overlay .lights { position: absolute; inset: 0; pointer-events: none; z-index: 0; opacity: 0; }
+      #perk-overlay.tier-dance .lights { opacity: 1; }
+      #perk-overlay .lights i { position: absolute; inset: -25%; mix-blend-mode: screen; }
+      #perk-overlay .lights .l-blue { background: radial-gradient(circle at 28% -10%, rgba(60,120,255,0.6), transparent 55%); animation: strobeA 0.5s steps(1) infinite; }
+      #perk-overlay .lights .l-red { background: radial-gradient(circle at 72% -10%, rgba(255,46,58,0.6), transparent 55%); animation: strobeB 0.5s steps(1) infinite; }
+      @keyframes strobeA { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+      @keyframes strobeB { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
+      /* The Waffle Party multi-stage sequence */
+      #perk-overlay.dancing .lights { opacity: 1; }
+      #perk-overlay .perk-content.stage-plate { animation: plateflip 0.7s cubic-bezier(.2,.8,.2,1); }
+      @keyframes plateflip { from { opacity: 0; transform: perspective(700px) rotateX(-72deg) scale(0.9); } to { opacity: 1; transform: none; } }
+      #perk-overlay .seq-plate { position: relative; }
+      #perk-overlay .seq-plate .perk-svg { width: 300px; height: 240px; }
+      #perk-overlay .seq-plate .plate-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; font-family: var(--font-crt); font-size: 28px; letter-spacing: 0.12em; line-height: 1.3; color: var(--cy-hot); text-shadow: var(--glow); padding: 0 24%; }
+      #perk-overlay .seq-masks { display: flex; gap: 22px; align-items: flex-end; }
+      #perk-overlay .seq-masks .m { width: 84px; height: 96px; animation: maskpop 0.5s ease backwards; }
+      #perk-overlay .seq-masks .m svg { display: block; width: 100%; height: 100%; }
+      #perk-overlay .seq-masks .m:nth-child(1) { color: var(--t-wo); animation-delay: 0s; }
+      #perk-overlay .seq-masks .m:nth-child(2) { color: var(--t-fc); animation-delay: 0.12s; }
+      #perk-overlay .seq-masks .m:nth-child(3) { color: var(--t-dr); animation-delay: 0.24s; }
+      #perk-overlay .seq-masks .m:nth-child(4) { color: var(--t-ma); animation-delay: 0.36s; }
+      @keyframes maskpop { from { opacity: 0; transform: translateY(16px) scale(0.7); } to { opacity: 1; transform: none; } }
+      /* The "SEXY" insertion gag — a small caret pops into a tight gap between FOUR and
+         TEMPERS, then SEXY is squeezed in above the line at an angle (overlapping the
+         neighbouring words = "trying to cram it in"). */
+      #perk-overlay .ins { position: relative; display: inline-block; width: 0.5em; color: var(--t-fc); }
+      #perk-overlay .ins .caret { position: absolute; left: 50%; bottom: 0.02em; font-size: 0.7em; opacity: 0; animation: caretin 0.3s ease forwards 1.4s; }
+      #perk-overlay .ins .sexy { position: absolute; left: -0.85em; bottom: 1em; font-size: 0.5em; letter-spacing: 0.03em; white-space: nowrap; text-shadow: var(--glow); transform-origin: bottom left; opacity: 0; animation: sexyin 0.4s ease forwards 1.9s; }
+      @keyframes caretin { from { opacity: 0; transform: translateX(-50%) scale(0.3); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
+      @keyframes sexyin { from { opacity: 0; transform: rotate(-13deg) translateY(5px) scale(0.6); } to { opacity: 1; transform: rotate(-13deg) translateY(0) scale(1); } }
+      #boot { flex-direction: column; gap: 13px; background: var(--bg); z-index: 60; }
+      #boot.show { display: flex; }
+      #boot.out { animation: perkout 0.85s ease forwards; }
+      #boot .lemon-big { height: 96px; width: auto; color: var(--cy); filter: drop-shadow(0 0 13px rgba(94, 240, 214, 0.55)); animation: bootpulse 2.4s ease-in-out infinite; }
+      #boot .lemon-big svg { display: block; height: 100%; width: auto; }
+      #boot .wm { font-family: var(--font-crt); font-size: 56px; letter-spacing: 0.3em; color: var(--cy-hot); text-shadow: var(--glow); }
+      #boot .ln { font-size: 12px; letter-spacing: 0.28em; color: var(--cy); }
+      #boot .boot-status { font-size: 11px; letter-spacing: 0.24em; color: var(--cy-dim); margin-top: 8px; }
+      @keyframes bootpulse { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
+      @keyframes valpop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+
+      /* The turn file explorer — a floating, draggable, resizable window. */
+      #explorer { position: fixed; z-index: 46; display: none; flex-direction: column; left: 0; top: 0;
+        background: #061a14; border: 1px solid var(--wire); border-radius: 8px; overflow: hidden;
+        box-shadow: 0 18px 60px rgba(0,0,0,0.6), inset 0 0 90px rgba(0,0,0,0.5); }
+      #explorer.on { display: flex; }
+      #explorer .exwin-bar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 12px; border-bottom: 1px solid var(--wire-soft); cursor: move; user-select: none; }
+      #explorer .exwin-title { font-size: 12px; letter-spacing: 0.16em; color: var(--cy-hot); text-shadow: var(--glow);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #explorer .exwin-x { flex: 0 0 auto; margin-left: 10px; width: 20px; height: 20px; display: flex; align-items: center;
+        justify-content: center; border: 1px solid var(--wire); border-radius: 4px; color: var(--cy); cursor: pointer; font-size: 12px; }
+      #explorer .exwin-x:hover { background: rgba(94, 240, 214, 0.15); }
+      #explorer .exwin-body { flex: 1; display: grid; grid-template-columns: 1.2fr 1fr; min-height: 0; }
+      #explorer .exwin-left { border-right: 1px solid var(--wire-soft); overflow: auto; padding: 6px 0; }
+      #explorer .exwin-right { overflow: auto; padding: 6px 0; }
+      #explorer .exph { font-size: 11px; letter-spacing: 0.16em; color: var(--cy-dim); padding: 6px 14px 8px; }
+      #explorer .exsort { float: right; color: var(--cy); cursor: pointer; letter-spacing: 0.1em; user-select: none; }
+      #explorer .exsort:hover { color: var(--cy-hot); }
+      #explorer .exrow { display: flex; align-items: center; gap: 11px; padding: 6px 14px; font-size: 14px; cursor: pointer; }
+      #explorer .exrow svg { width: 19px; height: 14px; flex: 0 0 auto; color: var(--cy); }
+      #explorer .exrow .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cy); }
+      #explorer .exrow .sz { font-family: var(--font-crt); font-size: 16px; color: var(--cy-dim); }
+      #explorer .exrow .tg { flex: 0 0 auto; font-size: 10px; letter-spacing: 0.1em; padding: 1px 7px; border: 1px solid var(--wire); border-radius: 3px; color: var(--cy-dim); }
+      #explorer .exrow .tg-fc { color: var(--cy-hot); border-color: rgba(94, 240, 214, 0.6); }
+      #explorer .exrow .tg-dr { color: var(--cy); border-color: var(--wire); }
+      #explorer .exrow .tg-wo { color: var(--cy-dim); border-color: var(--wire-soft); }
+      #explorer .exrow .tg-ma { color: var(--red); border-color: rgba(232, 112, 92, 0.55); }
+      #explorer .exrow:hover { background: rgba(94, 240, 214, 0.08); }
+      #explorer .exrow.on { background: var(--cy); }
+      #explorer .exrow.on .nm, #explorer .exrow.on .sz { color: var(--bg); }
+      #explorer .exrow.on svg { color: var(--bg); }
+      #explorer .exrow.on .tg { border-color: rgba(4, 16, 12, 0.5) !important; color: var(--bg) !important; }
+      #explorer .exfile { margin: 8px 14px; border: 1px solid var(--wire-soft); border-radius: 6px; }
+      #explorer .exfh { display: flex; align-items: center; gap: 9px; padding: 9px 13px; border-bottom: 1px solid var(--wire-soft); font-size: 13px; letter-spacing: 0.1em; color: var(--cy-hot); }
+      #explorer .exfh svg { width: 15px; height: 18px; color: var(--cy); }
+      #explorer .exkv { display: flex; justify-content: space-between; padding: 5px 13px; font-size: 13px; }
+      #explorer .exkv .k { color: var(--cy-dim); letter-spacing: 0.06em; }
+      #explorer .exkv .v { font-family: var(--font-crt); font-size: 16px; color: var(--cy-hot); text-shadow: var(--glow); }
+      #explorer .exkv .v.dim { color: var(--cy-dim); text-shadow: none; font-size: 13px; }
+      #explorer .exprompt { padding: 8px 13px; font-size: 13px; line-height: 1.55; color: var(--cy); border-top: 1px solid var(--wire-soft); }
+      #explorer .exwin-grip { position: absolute; right: 2px; bottom: 2px; width: 15px; height: 15px; cursor: nwse-resize;
+        background: linear-gradient(135deg, transparent 0 45%, var(--wire) 45% 55%, transparent 55% 68%, var(--wire) 68% 78%, transparent 78%); }
+
+      @media (prefers-reduced-motion: reduce) {
+        .num, #vig, #roll, #boot .lemon-big { animation: none !important; }
+        /* Hard-stop the photosensitivity hazard: the red/blue MDE strobe never flashes. */
+        #perk-overlay .lights, #perk-overlay .lights .l-blue, #perk-overlay .lights .l-red {
+          animation: none !important; opacity: 0 !important;
+        }
+        .box.landing .box-lid .flap-l, .box.landing .box-lid .flap-r { transition: none !important; }
+        #perk-overlay .perk-svg svg path, #perk-overlay .perk-svg svg line,
+        #perk-overlay .perk-svg svg polyline, #perk-overlay .perk-svg svg polygon { animation: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="screen">
+      <div id="head">
+        <span id="mark">
+          <span id="mark-logo" aria-hidden="true"></span>
+          &nbsp;MICRODATA REFINEMENT</span>
+        <span id="file">
+          <span id="file-name">AWAITING FILE</span>
+          <span id="file-meta">—</span>
+        </span>
+        <span id="pct">00%</span>
+      </div>
+      <div id="tabs"></div>
+      <div id="field"></div>
+      <div id="bins"></div>
+    </div>
+    <div id="cross"><span class="h"></span><span class="v"></span></div>
+    <div id="roll"></div>
+    <div id="scan"></div>
+    <div id="vig"></div>
+    <div id="status">connecting…</div>
+    <div id="standing"></div>
+    <div id="shelf"><span class="shelf-group" id="shelf-prizes"></span><span class="shelf-group" id="shelf-masks"></span></div>
+    <canvas id="confetti" aria-hidden="true"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,50 @@
+{
+  "name": "lemon-mdr",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "A Severance-style Macrodata Refinement terminal for your Claude Code agent sessions. Run `npx lemon-mdr`.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "severance",
+    "macrodata-refinement",
+    "mdr",
+    "agent",
+    "observability",
+    "cli",
+    "terminal",
+    "visualizer"
+  ],
+  "author": "Andrew Overeem <andrew.overeem@gmail.com>",
+  "license": "MIT",
+  "cli": {
+    "emoji": "🍋"
+  },
+  "bin": {
+    "lemon-mdr": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p core/tsconfig.json",
+    "build": "tsc --noEmit && vite build && tsc -p core/tsconfig.json",
+    "start": "node dist/cli.js",
+    "preview": "vite preview",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12"
+  }
+}
