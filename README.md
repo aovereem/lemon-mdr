@@ -75,7 +75,7 @@ all four, not just the smallest (`src/temper.ts`):
 | **WO** Woe (loss) | `linesRemoved` — the reference scale |
 | **FC** Frolic (creation) | `linesAdded × 0.3` + commits |
 | **DR** Dread (uncertainty) | `reads`, long grinding turns (`durationMs`), heavy context (`tokens`), stalls (`hung`) |
-| **MA** Malice (friction) | a grinding high-action turn (baseline), interrupts (`blocked`), error recoveries (`defended`) |
+| **MA** Malice (friction) | a grinding high-action turn (baseline), interrupts (`interrupted`), error recoveries (`verified`) |
 
 Every count comes straight from what the reader parses out of the transcript (a passive
 visualizer — nothing fabricated). The reweight exists because the raw signals are wildly
@@ -103,7 +103,7 @@ npx lemon-mdr --port 5180 --no-open  # pick a port / don't auto-open
 ```
 
 It reads Claude Code's transcripts under `~/.claude/projects`, builds the snapshots itself,
-serves the UI + the `/colony` WebSocket, and opens your browser. **Read-only** — it
+serves the UI + the `/stream` WebSocket, and opens your browser. **Read-only** — it
 never writes to your transcripts. Closing the window exits the server. Continuation chains
 (`--continue`d / replayed conversations) are de-duped, and subagents fold into the project's
 work without cluttering the session tabs.
@@ -114,7 +114,7 @@ in dev: `npm run build && node dist/cli.js`.
 
 ## Status
 
-Standalone and `npx`-able: its own transcript reader (`server/`), the five-box cycle model
+Standalone and `npx`-able: its own transcript reader (`core/`), the five-box cycle model
 live on real data, the two reward tracks (quiet masks + loud overlays), persistent PARTIES,
 CRT curvature, keyboard nav, and the LEMON wordmark. Temper weights are calibrated so all
 four fill comparably; `?debug` shows the live balance. Dials: `BOX_CAPACITY` for party
